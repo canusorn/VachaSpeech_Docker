@@ -67,7 +67,7 @@ def generate():
     max_length_multiplier = request.json.get("max_length_multiplier", 5)
 
     if not ref_audio:
-        ref_audio = "/ref_audio/test.mp3"
+        ref_audio = "/ref_audio/default_female.wav"
 
     output = generate_custom(text, gender=gender, temperature=temperature, top_p=top_p, top_k=top_k, repetition_penalty=repetition_penalty, max_length_multiplier=max_length_multiplier)
 

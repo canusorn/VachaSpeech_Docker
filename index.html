@@ -64,7 +64,7 @@ audio{width:100%;margin-top:16px;display:none}
 </div>
 <script>
 const DEFAULTS={
-ref_audio:'/ref_audio/test.mp3',
+ref_audio:'/ref_audio/default_female.wav',
 gender:'female',
 temperature:0.8,
 top_p:0.95,
@@ -171,20 +171,12 @@ const res=await fetch('http://localhost:7860/ref-audio-list');
 const files=await res.json();
 const sel=document.getElementById('ref_audio');
 sel.innerHTML='';
-let hasDefault=false;
-for(const f of files){
-const opt=document.createElement('option');
-opt.value=f.path;
-opt.textContent=f.name;
-if(f.path===DEFAULTS.ref_audio)hasDefault=true;
-sel.appendChild(opt);
-}
-if(!hasDefault&&files.length>0){
-const opt=document.createElement('option');
-opt.value=files[0].path;
-opt.textContent=files[0].name;
-sel.prepend(opt);
-}
+    for(const f of files){
+        const opt=document.createElement('option');
+        opt.value=f.path;
+        opt.textContent=f.name;
+        sel.appendChild(opt);
+    }
 const saved=localStorage.getItem('vachaspeech_settings');
 if(saved){
 try{
