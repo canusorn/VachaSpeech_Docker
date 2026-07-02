@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VachaSpeech TTS</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:20px}
+.card{background:#fff;border-radius:16px;padding:32px;width:100%;max-width:480px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+h1{font-size:22px;margin-bottom:4px;color:#222}
+p{font-size:14px;color:#666;margin-bottom:20px}
+label{display:block;font-size:13px;font-weight:600;color:#444;margin-bottom:4px}
+textarea,select{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;font-family:inherit}
+textarea{resize:vertical;min-height:80px}
+select{background:#fff;margin-bottom:16px}
+input[type=range]{width:100%;margin:0 0 16px 0;accent-color:#2563eb}
+input[type=range]+label{margin-top:-8px}
+small{font-weight:400;color:#888;font-size:11px}
+button{width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+button:hover{background:#1d4ed8}
+button:disabled{background:#93c5fd;cursor:not-allowed}
+audio{width:100%;margin-top:16px;display:none}
+.error{color:#dc2626;font-size:13px;margin-top:8px;display:none}
+.spinner{display:none;text-align:center;margin-top:12px}
+.spinner::after{content:'';display:inline-block;width:20px;height:20px;border:2px solid #ddd;border-top-color:#2563eb;border-radius:50%;animation:s .6s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>VachaSpeech TTS</h1>
+<p>สร้างเสียงพูดภาษาไทย</p>
+<label for="text">ข้อความ</label>
+<textarea id="text" placeholder="พิมพ์ข้อความภาษาไทย...">สวัสดีครับ สบายดีไหม</textarea>
+<label for="ref_audio">เสียงอ้างอิง</label>
+<div style="display:flex;gap:8px">
+<select id="ref_audio" style="flex:1"><option value="">กำลังโหลด...</option></select>
+<button id="recBtn" onclick="toggleRecord()" style="flex:0 0 auto;width:auto;padding:10px 16px;background:#dc2626">อัดเสียง</button>
+</div>
+<small id="recStatus" style="color:#dc2626;display:none">กำลังอัด...</small>
+<label for="gender">เพศ</label>
+<select id="gender">
+<option value="female">หญิง</option>
+<option value="male">ชาย</option>
+</select>
+<label for="temperature">Temperature <span id="tv">0.8</span> <small>ความสุ่มของเสียง (ต่ำ=นิ่ง, สูง=หลากหลาย)</small></label>
+<input type="range" id="temperature" min="0.1" max="1.5" step="0.05" value="0.8" oninput="document.getElementById('tv').textContent=this.value">
+<label for="top_p">Top-P <span id="tpv">0.95</span> <small>ความหลากหลายของคำ (ยิ่งสูงยิ่งสุ่ม)</small></label>
+<input type="range" id="top_p" min="0.5" max="1" step="0.01" value="0.95" oninput="document.getElementById('tpv').textContent=this.value">
+<label for="top_k">Top-K <span id="tkv">40</span> <small>เลือกจาก K คำที่มีโอกาสสูงสุด</small></label>
+<input type="range" id="top_k" min="1" max="100" step="1" value="40" oninput="document.getElementById('tkv').textContent=this.value">
+<label for="repetition_penalty">Repetition Penalty <span id="rpv">1.1</span> <small>ลดการซ้ำคำ (ยิ่งสูงยิ่งซ้ำน้อย)</small></label>
+<input type="range" id="repetition_penalty" min="1" max="2" step="0.05" value="1.1" oninput="document.getElementById('rpv').textContent=this.value">
+<label for="speed">Speed <span id="spv">1.0</span> <small>ความเร็วในการพูด (1.0=ปกติ, 1.5=เร็ว, 0.5=ช้า)</small></label>
+<input type="range" id="speed" min="0.5" max="2" step="0.05" value="1.0" oninput="document.getElementById('spv').textContent=this.value">
+<label for="max_length_multiplier">Token Multiplier <span id="mlv">5</span> <small>จำนวน token สูงสุด = ตัวคูณ x ความยาวข้อความ (เพิ่มถ้าพูดไม่จบ)</small></label>
+<input type="range" id="max_length_multiplier" min="3" max="15" step="1" value="5" oninput="document.getElementById('mlv').textContent=this.value">
+<button id="btn" onclick="generate()">สร้างเสียง</button>
+<button id="rst" onclick="restoreDefaults()" style="margin-top:8px;background:#6b7280">รีเซ็ตค่าเริ่มต้น</button>
+<div class="spinner" id="spinner"></div>
+<audio id="player" controls></audio>
+<div class="error" id="error"></div>
+</div>
+<script>
+const DEFAULTS={
+ref_audio:'/ref_audio/test.mp3',
+gender:'female',
+temperature:0.8,
+top_p:0.95,
+top_k:40,
+repetition_penalty:1.1,
+speed:1.0,
+max_length_multiplier:5
+};
+const FIELDS=['ref_audio','gender','temperature','top_p','top_k','repetition_penalty','speed','max_length_multiplier'];
+const LABELS={temperature:'tv',top_p:'tpv',top_k:'tkv',repetition_penalty:'rpv',speed:'spv',max_length_multiplier:'mlv'};
+
+function saveSettings(){
+const s={};
+for(const f of FIELDS){
+const el=document.getElementById(f);
+s[f]=el.type==='range'?parseFloat(el.value):el.value;
+}
+localStorage.setItem('vachaspeech_settings',JSON.stringify(s));
+}
+
+function applySettings(s){
+for(const f of FIELDS){
+const el=document.getElementById(f);
+if(s[f]!==undefined){
+el.value=s[f];
+if(LABELS[f])document.getElementById(LABELS[f]).textContent=s[f];
+}
+}
+}
+
+function loadSettings(){
+const raw=localStorage.getItem('vachaspeech_settings');
+if(raw){
+try{
+const s=JSON.parse(raw);
+applySettings(s);
+}catch(e){
+applySettings(DEFAULTS);
+}
+}else{
+applySettings(DEFAULTS);
+}
+}
+
+function restoreDefaults(){
+if(!confirm('รีเซ็ตค่าเริ่มต้นทั้งหมด?'))return;
+localStorage.removeItem('vachaspeech_settings');
+applySettings(DEFAULTS);
+}
+
+document.querySelectorAll('input,select').forEach(el=>{
+const id=el.id;
+if(id&&FIELDS.includes(id)){
+el.addEventListener('input',saveSettings);
+el.addEventListener('change',saveSettings);
+}
+});
+
+async function generate(){
+const btn=document.getElementById('btn');
+const spinner=document.getElementById('spinner');
+const player=document.getElementById('player');
+const err=document.getElementById('error');
+player.style.display='none';
+err.style.display='none';
+btn.disabled=true;
+spinner.style.display='block';
+try{
+const res=await fetch('http://localhost:7860/tts',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({
+text:document.getElementById('text').value,
+ref_audio:document.getElementById('ref_audio').value,
+gender:document.getElementById('gender').value,
+temperature:parseFloat(document.getElementById('temperature').value),
+top_p:parseFloat(document.getElementById('top_p').value),
+top_k:parseInt(document.getElementById('top_k').value),
+repetition_penalty:parseFloat(document.getElementById('repetition_penalty').value),
+speed:parseFloat(document.getElementById('speed').value),
+max_length_multiplier:parseInt(document.getElementById('max_length_multiplier').value)
+})
+});
+if(!res.ok)throw new Error('API error: '+res.status);
+const blob=await res.blob();
+const url=URL.createObjectURL(blob);
+player.src=url;
+player.style.display='block';
+player.play();
+}catch(e){
+err.textContent='เกิดข้อผิดพลาด: '+e.message;
+err.style.display='block';
+}finally{
+btn.disabled=false;
+spinner.style.display='none';
+}
+}
+
+    loadSettings();
+
+async function loadRefAudioList(){
+try{
+const res=await fetch('http://localhost:7860/ref-audio-list');
+const files=await res.json();
+const sel=document.getElementById('ref_audio');
+sel.innerHTML='';
+let hasDefault=false;
+for(const f of files){
+const opt=document.createElement('option');
+opt.value=f.path;
+opt.textContent=f.name;
+if(f.path===DEFAULTS.ref_audio)hasDefault=true;
+sel.appendChild(opt);
+}
+if(!hasDefault&&files.length>0){
+const opt=document.createElement('option');
+opt.value=files[0].path;
+opt.textContent=files[0].name;
+sel.prepend(opt);
+}
+const saved=localStorage.getItem('vachaspeech_settings');
+if(saved){
+try{
+const s=JSON.parse(saved);
+if(s.ref_audio)sel.value=s.ref_audio;
+}catch(e){}
+}
+}catch(e){console.error('ref audio list error',e);}
+}
+loadRefAudioList();
+
+let mediaRecorder=null;
+let audioChunks=[];
+
+function toggleRecord(){
+const btn=document.getElementById('recBtn');
+const st=document.getElementById('recStatus');
+if(mediaRecorder&&mediaRecorder.state==='recording'){
+stopRecording();
+btn.textContent='อัดเสียง';
+btn.style.background='#dc2626';
+st.style.display='none';
+}else{
+startRecording();
+btn.textContent='หยุด';
+btn.style.background='#9333ea';
+st.style.display='inline';
+}
+}
+
+function startRecording(){
+audioChunks=[];
+navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+mediaRecorder=new MediaRecorder(stream,{mimeType:'audio/webm'});
+mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);
+mediaRecorder.onstop=()=>{
+stream.getTracks().forEach(t=>t.stop());
+const blob=new Blob(audioChunks,{type:'audio/webm'});
+uploadRecording(blob);
+};
+mediaRecorder.start();
+}).catch(e=>{
+document.getElementById('error').textContent='ไม่สามารถเข้าถึงไมโครโฟน: '+e.message;
+document.getElementById('error').style.display='block';
+document.getElementById('recBtn').textContent='อัดเสียง';
+document.getElementById('recBtn').style.background='#dc2626';
+});
+}
+
+function stopRecording(){
+if(mediaRecorder&&mediaRecorder.state==='recording'){
+mediaRecorder.stop();
+}
+}
+
+async function uploadRecording(blob){
+const err=document.getElementById('error');
+err.style.display='none';
+try{
+const form=new FormData();
+form.append('file',blob,'recording.webm');
+const res=await fetch('http://localhost:7860/upload-ref-audio',{method:'POST',body:form});
+if(!res.ok)throw new Error('upload failed: '+res.status);
+await loadRefAudioList();
+const sel=document.getElementById('ref_audio');
+if(sel.options.length>0)sel.selectedIndex=0;
+sel.dispatchEvent(new Event('change'));
+}catch(e){
+err.textContent='อัปโหลดล้มเหลว: '+e.message;
+err.style.display='block';
+}
+}
+</script>
+</body>
+</html>

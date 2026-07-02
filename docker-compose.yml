@@ -1,0 +1,18 @@
+services:
+  vachaspeech:
+    build: .
+    container_name: vachaspeech
+    ports:
+      - "7860:7860"
+
+    volumes:
+      - ./app.py:/app/app.py
+      - ./models:/root/.cache/huggingface
+      - ./torch_cache:/root/.cache/torch
+      - ./ref_audio:/ref_audio
+
+    restart: unless-stopped
+
+    # cpus: "1"
+    # mem_limit: 3g
+    # memswap_limit: 3g
