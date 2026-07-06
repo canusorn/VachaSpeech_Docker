@@ -15,9 +15,8 @@ textarea,select{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius
 textarea{resize:vertical;min-height:80px}
 select{background:#fff;margin-bottom:16px}
 input[type=range]{width:100%;margin:0 0 16px 0;accent-color:#2563eb}
-input[type=range]+label{margin-top:-8px}
 small{font-weight:400;color:#888;font-size:11px}
-button{width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+button{width:100%;padding:12px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:.15s}
 button:hover{background:#1d4ed8}
 button:disabled{background:#93c5fd;cursor:not-allowed}
 audio{width:100%;margin-top:16px;display:none}
@@ -25,6 +24,19 @@ audio{width:100%;margin-top:16px;display:none}
 .spinner{display:none;text-align:center;margin-top:12px}
 .spinner::after{content:'';display:inline-block;width:20px;height:20px;border:2px solid #ddd;border-top-color:#2563eb;border-radius:50%;animation:s .6s linear infinite}
 @keyframes s{to{transform:rotate(360deg)}}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;justify-content:center;align-items:center}
+.modal.open{display:flex}
+.modal-content{background:#fff;border-radius:16px;padding:24px;width:90%;max-width:440px;max-height:80vh;overflow-y:auto}
+.modal-content h2{font-size:18px;margin-bottom:16px}
+.modal-close{background:#6b7280;margin-top:12px}
+.rec-row{display:flex;gap:8px;align-items:center;margin:8px 0 12px}
+.rec-row input{flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px}
+.rec-row button{width:auto;padding:10px 20px;white-space:nowrap}
+.rec-status{font-size:13px;color:#dc2626;margin-bottom:8px;display:none}
+.file-list{margin-top:12px}
+.file-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid #eee;border-radius:8px;margin-bottom:6px;font-size:14px}
+.file-item button{width:auto;padding:4px 12px;font-size:13px;background:#dc2626;flex-shrink:0;margin-left:8px}
+.file-item button:hover{background:#b91c1c}
 </style>
 </head>
 <body>
@@ -36,9 +48,8 @@ audio{width:100%;margin-top:16px;display:none}
 <label for="ref_audio">เสียงอ้างอิง</label>
 <div style="display:flex;gap:8px">
 <select id="ref_audio" style="flex:1"><option value="">กำลังโหลด...</option></select>
-<button id="recBtn" onclick="toggleRecord()" style="flex:0 0 auto;width:auto;padding:10px 16px;background:#dc2626">อัดเสียง</button>
+<button onclick="openModal()" style="flex:0 0 auto;width:auto;background:#374151;border:1px solid #374151;font-size:15px;padding:0 12px;height:37px;line-height:35px">จัดการ</button>
 </div>
-<small id="recStatus" style="color:#dc2626;display:none">กำลังอัด...</small>
 <label for="gender">เพศ</label>
 <select id="gender">
 <option value="female">หญิง</option>
@@ -57,11 +68,26 @@ audio{width:100%;margin-top:16px;display:none}
 <label for="max_length_multiplier">Token Multiplier <span id="mlv">5</span> <small>จำนวน token สูงสุด = ตัวคูณ x ความยาวข้อความ (เพิ่มถ้าพูดไม่จบ)</small></label>
 <input type="range" id="max_length_multiplier" min="3" max="15" step="1" value="5" oninput="document.getElementById('mlv').textContent=this.value">
 <button id="btn" onclick="generate()">สร้างเสียง</button>
-<button id="rst" onclick="restoreDefaults()" style="margin-top:8px;background:#6b7280">รีเซ็ตค่าเริ่มต้น</button>
+<button onclick="restoreDefaults()" style="margin-top:8px;background:#6b7280">รีเซ็ตค่าเริ่มต้น</button>
 <div class="spinner" id="spinner"></div>
 <audio id="player" controls></audio>
 <div class="error" id="error"></div>
 </div>
+
+<div class="modal" id="modal">
+<div class="modal-content">
+<h2>จัดการเสียงอ้างอิง</h2>
+<label>ชื่อไฟล์</label>
+<div class="rec-row">
+<input id="recName" placeholder="my_voice.wav" value="my_voice.wav">
+<button id="recBtn" onclick="toggleRecord()" style="background:#dc2626">อัดเสียง</button>
+</div>
+<div class="rec-status" id="recStatus">กำลังอัด...</div>
+<div class="file-list" id="fileList"></div>
+<button class="modal-close" onclick="closeModal()">ปิด</button>
+</div>
+</div>
+
 <script>
 const DEFAULTS={
 ref_audio:'/ref_audio/default_female.wav',
@@ -75,6 +101,8 @@ max_length_multiplier:5
 };
 const FIELDS=['ref_audio','gender','temperature','top_p','top_k','repetition_penalty','speed','max_length_multiplier'];
 const LABELS={temperature:'tv',top_p:'tpv',top_k:'tkv',repetition_penalty:'rpv',speed:'spv',max_length_multiplier:'mlv'};
+let mediaRecorder=null;
+let audioChunks=[];
 
 function saveSettings(){
 const s={};
@@ -98,15 +126,8 @@ if(LABELS[f])document.getElementById(LABELS[f]).textContent=s[f];
 function loadSettings(){
 const raw=localStorage.getItem('vachaspeech_settings');
 if(raw){
-try{
-const s=JSON.parse(raw);
-applySettings(s);
-}catch(e){
-applySettings(DEFAULTS);
-}
-}else{
-applySettings(DEFAULTS);
-}
+try{applySettings(JSON.parse(raw));}catch(e){applySettings(DEFAULTS);}
+}else{applySettings(DEFAULTS);}
 }
 
 function restoreDefaults(){
@@ -122,6 +143,131 @@ el.addEventListener('input',saveSettings);
 el.addEventListener('change',saveSettings);
 }
 });
+
+function openModal(){
+document.getElementById('modal').classList.add('open');
+loadFileList();
+}
+
+function closeModal(){
+document.getElementById('modal').classList.remove('open');
+}
+
+function toggleRecord(){
+const btn=document.getElementById('recBtn');
+const st=document.getElementById('recStatus');
+if(mediaRecorder&&mediaRecorder.state==='recording'){
+stopRecording();
+btn.textContent='อัดเสียง';
+btn.style.background='#dc2626';
+st.style.display='none';
+}else{
+startRecording();
+btn.textContent='หยุด';
+btn.style.background='#9333ea';
+st.style.display='block';
+}
+}
+
+function startRecording(){
+audioChunks=[];
+navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+mediaRecorder=new MediaRecorder(stream,{mimeType:'audio/webm'});
+mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);
+mediaRecorder.onstop=()=>{
+stream.getTracks().forEach(t=>t.stop());
+const blob=new Blob(audioChunks,{type:'audio/webm'});
+uploadRecording(blob);
+};
+mediaRecorder.start();
+}).catch(e=>{
+document.getElementById('error').textContent='ไม่สามารถเข้าถึงไมโครโฟน: '+e.message;
+document.getElementById('error').style.display='block';
+document.getElementById('recBtn').textContent='อัดเสียง';
+document.getElementById('recBtn').style.background='#dc2626';
+document.getElementById('recStatus').style.display='none';
+});
+}
+
+function stopRecording(){
+if(mediaRecorder&&mediaRecorder.state==='recording'){
+mediaRecorder.stop();
+}
+}
+
+async function uploadRecording(blob){
+const name=document.getElementById('recName').value.trim()||'recording.wav';
+try{
+const form=new FormData();
+form.append('file',blob,'recording.webm');
+form.append('name',name);
+const res=await fetch('http://localhost:7860/upload-ref-audio',{method:'POST',body:form});
+if(!res.ok)throw new Error('upload failed: '+res.status);
+await loadRefAudioList();
+await loadFileList();
+}catch(e){
+document.getElementById('error').textContent='อัปโหลดล้มเหลว: '+e.message;
+document.getElementById('error').style.display='block';
+}
+}
+
+async function deleteFile(name){
+if(!confirm('ลบไฟล์ "'+name+'"?'))return;
+try{
+const res=await fetch('http://localhost:7860/delete-ref-audio',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({name})
+});
+if(!res.ok)throw new Error('delete failed');
+await loadRefAudioList();
+await loadFileList();
+}catch(e){
+document.getElementById('error').textContent='ลบล้มเหลว: '+e.message;
+document.getElementById('error').style.display='block';
+}
+}
+
+async function loadRefAudioList(){
+try{
+const res=await fetch('http://localhost:7860/ref-audio-list');
+const files=await res.json();
+const sel=document.getElementById('ref_audio');
+sel.innerHTML='';
+for(const f of files){
+const opt=document.createElement('option');
+opt.value=f.path;
+opt.textContent=f.name;
+sel.appendChild(opt);
+}
+const saved=localStorage.getItem('vachaspeech_settings');
+if(saved){
+try{
+const s=JSON.parse(saved);
+if(s.ref_audio)sel.value=s.ref_audio;
+}catch(e){}
+}
+}catch(e){console.error(e);}
+}
+
+async function loadFileList(){
+try{
+const res=await fetch('http://localhost:7860/ref-audio-list');
+const files=await res.json();
+const el=document.getElementById('fileList');
+el.innerHTML='';
+if(files.length===0){
+el.innerHTML='<div style="color:#888;font-size:14px;text-align:center;padding:16px">ไม่มีไฟล์เสียง</div>';
+return;
+}
+for(const f of files){
+const div=document.createElement('div');
+div.className='file-item';
+div.innerHTML='<span>'+f.name+'</span><button onclick="deleteFile(\''+f.name.replace(/'/g,"\\'")+'\')">ลบ</button>';
+el.appendChild(div);
+}
+}catch(e){console.error(e);}
+}
 
 async function generate(){
 const btn=document.getElementById('btn');
@@ -163,92 +309,8 @@ spinner.style.display='none';
 }
 }
 
-    loadSettings();
-
-async function loadRefAudioList(){
-try{
-const res=await fetch('http://localhost:7860/ref-audio-list');
-const files=await res.json();
-const sel=document.getElementById('ref_audio');
-sel.innerHTML='';
-    for(const f of files){
-        const opt=document.createElement('option');
-        opt.value=f.path;
-        opt.textContent=f.name;
-        sel.appendChild(opt);
-    }
-const saved=localStorage.getItem('vachaspeech_settings');
-if(saved){
-try{
-const s=JSON.parse(saved);
-if(s.ref_audio)sel.value=s.ref_audio;
-}catch(e){}
-}
-}catch(e){console.error('ref audio list error',e);}
-}
+loadSettings();
 loadRefAudioList();
-
-let mediaRecorder=null;
-let audioChunks=[];
-
-function toggleRecord(){
-const btn=document.getElementById('recBtn');
-const st=document.getElementById('recStatus');
-if(mediaRecorder&&mediaRecorder.state==='recording'){
-stopRecording();
-btn.textContent='อัดเสียง';
-btn.style.background='#dc2626';
-st.style.display='none';
-}else{
-startRecording();
-btn.textContent='หยุด';
-btn.style.background='#9333ea';
-st.style.display='inline';
-}
-}
-
-function startRecording(){
-audioChunks=[];
-navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
-mediaRecorder=new MediaRecorder(stream,{mimeType:'audio/webm'});
-mediaRecorder.ondataavailable=e=>audioChunks.push(e.data);
-mediaRecorder.onstop=()=>{
-stream.getTracks().forEach(t=>t.stop());
-const blob=new Blob(audioChunks,{type:'audio/webm'});
-uploadRecording(blob);
-};
-mediaRecorder.start();
-}).catch(e=>{
-document.getElementById('error').textContent='ไม่สามารถเข้าถึงไมโครโฟน: '+e.message;
-document.getElementById('error').style.display='block';
-document.getElementById('recBtn').textContent='อัดเสียง';
-document.getElementById('recBtn').style.background='#dc2626';
-});
-}
-
-function stopRecording(){
-if(mediaRecorder&&mediaRecorder.state==='recording'){
-mediaRecorder.stop();
-}
-}
-
-async function uploadRecording(blob){
-const err=document.getElementById('error');
-err.style.display='none';
-try{
-const form=new FormData();
-form.append('file',blob,'recording.webm');
-const res=await fetch('http://localhost:7860/upload-ref-audio',{method:'POST',body:form});
-if(!res.ok)throw new Error('upload failed: '+res.status);
-await loadRefAudioList();
-const sel=document.getElementById('ref_audio');
-if(sel.options.length>0)sel.selectedIndex=0;
-sel.dispatchEvent(new Event('change'));
-}catch(e){
-err.textContent='อัปโหลดล้มเหลว: '+e.message;
-err.style.display='block';
-}
-}
 </script>
 </body>
 </html>

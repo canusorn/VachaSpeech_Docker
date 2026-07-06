@@ -11,6 +11,12 @@ services:
       - ./torch_cache:/root/.cache/torch
       - ./ref_audio:/ref_audio
 
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
     restart: unless-stopped
 
     # cpus: "1"

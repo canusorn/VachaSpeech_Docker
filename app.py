@@ -15,6 +15,16 @@ CORS(app)
 
 tts = VachaSpeech()
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+if device.type == "cuda":
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+    tts.model = tts.model.to(device)
+    if hasattr(tts, "codec") and hasattr(tts.codec, "model"):
+        tts.codec.model = tts.codec.model.to(device)
+else:
+    print("No GPU detected, falling back to CPU")
+
 def generate_custom(text, gender="female", temperature=0.8, top_p=0.95, top_k=40, repetition_penalty=1.1, max_length_multiplier=5):
     clean_text = normalize_text(text)
     predict_max_len = len(clean_text) * max_length_multiplier
@@ -33,7 +43,7 @@ def generate_custom(text, gender="female", temperature=0.8, top_p=0.95, top_k=40
                         return_tensors='pt',
                         padding=True,
                         truncation=True,
-                        max_length=512).to("cpu")
+                        max_length=512).to(device)
 
     with torch.inference_mode():
         outputs = tts.model.generate(
@@ -105,10 +115,27 @@ def upload_ref_audio():
     if "file" not in request.files:
         return jsonify({"error": "no file"}), 400
     f = request.files["file"]
-    ts = int(__import__("time").time())
-    name = f"recording_{ts}.wav"
-    path = Path("/ref_audio") / name
+    name = request.form.get("name", "").strip()
+    if not name:
+        ts = int(__import__("time").time())
+        name = f"recording_{ts}.wav"
+    if not name.lower().endswith((".wav", ".mp3", ".flac", ".ogg")):
+        name += ".wav"
+    safe = "".join(c for c in name if c.isalnum() or c in "._- ")
+    path = Path("/ref_audio") / safe
     f.save(str(path))
-    return jsonify({"name": name, "path": str(path)})
+    return jsonify({"name": safe, "path": str(path)})
+
+@app.route("/delete-ref-audio", methods=["POST"])
+def delete_ref_audio():
+    name = request.json.get("name", "")
+    if not name:
+        return jsonify({"error": "no name"}), 400
+    safe = "".join(c for c in name if c.isalnum() or c in "._- ")
+    path = Path("/ref_audio") / safe
+    if path.exists() and path.is_file():
+        path.unlink()
+        return jsonify({"deleted": safe})
+    return jsonify({"error": "not found"}), 404
 
 app.run(host="0.0.0.0", port=7860)

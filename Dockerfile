@@ -19,7 +19,7 @@ RUN pip install --timeout 300 --retries 10 \
     torchaudio \
     flask \
     flask-cors \
-    --extra-index-url https://download.pytorch.org/whl/cpu
+    --extra-index-url https://download.pytorch.org/whl/cu121
 
 RUN pip install accelerate transformers && \
     pip install git+https://github.com/VYNCX/VachaSpeech.git

@@ -1,10 +1,10 @@
 # VachaSpeech Thai TTS
 
-ระบบสังเคราะห์เสียงภาษาไทยแบบ Voice Cloning รันบน Docker (CPU)
+ระบบสังเคราะห์เสียงภาษาไทยแบบ Voice Cloning รันบน Docker (รองรับ GPU)
 
 ใช้โมเดล [VachaSpeech](https://github.com/VYNCX/VachaSpeech) โดย [VIZINTZOR](https://huggingface.co/VIZINTZOR/VachaSpeech)
 
-## เริ่มต้น
+## เริ่มต้น (CPU)
 
 ```powershell
 docker compose up -d
@@ -13,6 +13,33 @@ docker compose up -d
 รอประมาณ 30-60 วินาทีให้โมเดลโหลด แล้วเปิด `http://localhost:7860`
 
 หรือเปิด `index.html` ใน browser เพื่อใช้งานหน้าเว็บ
+
+## GPU Setup (Windows + Docker Desktop + WSL 2)
+
+รองรับ NVIDIA GPU (ทดสอบกับ RTX 4060)
+
+### ความต้องการ
+
+- Docker Desktop ที่ใช้ WSL 2 backend
+- NVIDIA Driver บน Windows (ที่รองรับ WSL 2)
+- WSL 2 distro เช่น Ubuntu
+
+### ทดสอบว่า Docker เห็น GPU
+
+```powershell
+docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
+```
+
+ถ้าเห็น GPU แสดงว่าพร้อมใช้งาน
+
+### Build และรันด้วย GPU
+
+```powershell
+docker compose build
+docker compose up
+```
+
+Container จะใช้ GPU โดยอัตโนมัติ (CUDA 12.1) ช่วยให้ TTS เร็วขึ้นมากเมื่อเทียบกับ CPU
 
 ## วิธีใช้ (หน้าเว็บ)
 
