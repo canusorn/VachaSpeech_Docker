@@ -81,6 +81,14 @@ Invoke-RestMethod -Uri http://localhost:7860/tts -Method Post `
   -ContentType "application/json" -OutFile output.wav
 ```
 
+ใช้เสียงอ้างอิง (voice cloning) ด้วยไฟล์ `default_male.wav`:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:7860/tts -Method Post `
+  -Body '{"text":"สวัสดีครับ","gender":"male","ref_audio":"/ref_audio/default_male.wav"}' `
+  -ContentType "application/json" -OutFile output.wav
+```
+
 ### GET /ref-audio-list
 
 ```powershell
