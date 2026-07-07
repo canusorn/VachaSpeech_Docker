@@ -89,6 +89,48 @@ Invoke-RestMethod -Uri http://localhost:7860/tts -Method Post `
   -ContentType "application/json" -OutFile output.wav
 ```
 
+ปรับความเร็วด้วยพารามิเตอร์ `speed` (ค่า 0.5–2.0, default 1.0):
+
+```powershell
+# พูดเร็ว 1.5 เท่า
+Invoke-RestMethod -Uri http://localhost:7860/tts -Method Post `
+  -Body '{"text":"สวัสดีครับ","gender":"female","speed":1.5}' `
+  -ContentType "application/json" -OutFile output.wav
+
+# พูดช้าลง 0.75 เท่า
+Invoke-RestMethod -Uri http://localhost:7860/tts -Method Post `
+  -Body '{"text":"สวัสดีครับ","gender":"male","ref_audio":"/ref_audio/default_male.wav","speed":0.75}' `
+  -ContentType "application/json" -OutFile output.wav
+```
+
+เรียก API ด้วย curl:
+
+```bash
+curl -X POST http://localhost:7860/tts \
+  -H "Content-Type: application/json" \
+  -d '{"text":"สวัสดีครับ","gender":"female","speed":1.5}' \
+  -o output.wav
+```
+
+ครบทุกพารามิเตอร์:
+
+```bash
+curl -X POST http://localhost:7860/tts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text":"สวัสดีครับ สบายดีไหม",
+    "gender":"female",
+    "ref_audio":"/ref_audio/default_female.wav",
+    "temperature":0.8,
+    "top_p":0.95,
+    "top_k":40,
+    "repetition_penalty":1.1,
+    "speed":1.2,
+    "max_length_multiplier":5
+  }' \
+  -o output.wav
+```
+
 ### GET /ref-audio-list
 
 ```powershell
