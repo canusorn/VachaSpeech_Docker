@@ -8,7 +8,48 @@ import os
 import subprocess
 import re
 import torch
+import numpy as np
+import soundfile as sf
 from pathlib import Path
+
+def trim_trailing_noise(filepath, threshold=0.02, window_ms=10, margin_ms=100):
+    """Trim trailing noise from a WAV file using RMS energy analysis.
+
+    Scans from the end to find sustained low-energy regions (noise floor)
+    produced by the codec when fed garbage tokens past the end of speech.
+    """
+    data, sr = sf.read(filepath)
+    if data.ndim > 1:
+        data = np.mean(data, axis=1)
+
+    window = max(int(sr * window_ms / 1000), 1)
+    n = len(data)
+
+    # Compute RMS per window (vectorized)
+    n_windows = (n + window - 1) // window
+    rms = np.zeros(n_windows)
+    for i in range(n_windows):
+        start = i * window
+        end = min(start + window, n)
+        chunk = data[start:end]
+        rms[i] = np.sqrt(np.mean(chunk**2))
+
+    peak_rms = np.max(rms)
+    if peak_rms < 1e-8:
+        return
+
+    rms_norm = rms / peak_rms
+    above = np.where(rms_norm > threshold)[0]
+    if len(above) == 0:
+        return
+
+    # Last window above threshold → cut after margin
+    last_idx = above[-1]
+    cut = min((last_idx + 1) * window + int(sr * margin_ms / 1000), n)
+
+    if n - cut >= sr * 0.2:
+        sf.write(filepath, data[:cut], sr)
+
 
 app = Flask(__name__)
 CORS(app)
@@ -88,6 +129,8 @@ def generate():
         ref_audio=ref_audio,
         output=outfile.name
     )
+
+    trim_trailing_noise(outfile.name)
 
     if speed != 1.0:
         sped = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
