@@ -165,8 +165,19 @@ def upload_ref_audio():
     if not name.lower().endswith((".wav", ".mp3", ".flac", ".ogg")):
         name += ".wav"
     safe = "".join(c for c in name if c.isalnum() or c in "._- ")
+    if not safe.lower().endswith(".wav"):
+        safe += ".wav"
     path = Path("/ref_audio") / safe
-    f.save(str(path))
+
+    # Save to temp first, then convert to proper WAV (browser may send WebM)
+    tmp = tempfile.NamedTemporaryFile(suffix=".webm", delete=False)
+    f.save(tmp.name)
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", tmp.name, "-ac", "1", "-ar", "24000", str(path)],
+        capture_output=True
+    )
+    os.unlink(tmp.name)
+
     return jsonify({"name": safe, "path": str(path)})
 
 @app.route("/delete-ref-audio", methods=["POST"])
