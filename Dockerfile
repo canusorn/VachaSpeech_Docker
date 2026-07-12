@@ -14,14 +14,16 @@ WORKDIR /app
 
 RUN pip install --upgrade pip
 
-RUN pip install --timeout 300 --retries 10 \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --timeout 300 --retries 10 \
     torch \
     torchaudio \
     flask \
     flask-cors \
     --extra-index-url https://download.pytorch.org/whl/cu121
 
-RUN pip install accelerate transformers && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install accelerate transformers && \
     pip install git+https://github.com/VYNCX/VachaSpeech.git
 
 COPY app.py .

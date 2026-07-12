@@ -104,6 +104,10 @@ def generate_custom(text, gender="female", temperature=0.8, top_p=0.95, top_k=40
     codes = list(map(int, re.findall(r"<\|s_(\d+)\|>", result)))
     return codes
 
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "device": device.type})
+
 @app.route("/tts", methods=["POST"])
 def generate():
 
